@@ -112,7 +112,10 @@ helpers do
 
   def spearman_ranks(x)
     x.sort!
-    return x.collect{|i| found = []; x.each_index {|e| (x[e]==i) ? found << (e+1) : nil }; i = found.reduce(:+)/found.count.to_f }
+    puts x.inspect
+    y = x.collect{|i| found = []; x.each_index {|e| (x[e]==i) ? found << (e+1) : nil }; i = found.reduce(:+)/found.count.to_f }
+    puts y.inspect
+    return y
   end
 
   def cosine_similarity(x, y)
