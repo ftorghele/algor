@@ -16,13 +16,13 @@ class Book
   include DataMapper::Resource
 
   property :isbn, String, :field => "ISBN", :key => true
-  property :title, String, :field => "Book-Title"
-  property :author, String, :field => "Book-Author"
-  property :year, Integer, :field => "Year-Of-Publication"
-  property :publisher, String, :field => "Publisher"
-  property :image_s, String, :field => "Image-URL-S"
-  property :image_m, String, :field => "Image-URL-M"
-  property :image_l, String, :field => "Image-URL-L"
+#  property :title, String, :field => "Book-Title"
+#  property :author, String, :field => "Book-Author"
+#  property :year, Integer, :field => "Year-Of-Publication"
+#  property :publisher, String, :field => "Publisher"
+#  property :image_s, String, :field => "Image-URL-S"
+#  property :image_m, String, :field => "Image-URL-M"
+#  property :image_l, String, :field => "Image-URL-L"
 end
 
 class User 
@@ -43,56 +43,33 @@ class Main
   user_ids = repository(:default).adapter.select('SELECT COUNT("User-ID") as count, "User-ID" FROM book_ratings
                                                   WHERE "Book-Rating" != 0
                                                   GROUP BY "User-ID"
-                                                  ORDER BY count DESC LIMIT 3').collect{|i| i.user_id}
+                                                  ORDER BY count DESC LIMIT 5').collect{|i| i.user_id}
 
 
-  def calculate user, user_ids
-
-    max = 0;
-    user_id = nil;
-
-    users = User.all(:user_id => user_ids)
-    users.each do |u|
-      if u.user_id != user.user_id
-        isbns = repository(:default).adapter.select('SELECT "ISBN" FROM book_ratings WHERE "User-ID" IN ?
-                                                GROUP BY "ISBN" HAVING COUNT("ISBN") = 2', [u.user_id, user.user_id] )
-        x = BookRating.all(:isbn => isbns, :user_id => user.user_id).collect{|i| i.book_rating}
-        y = BookRating.all(:isbn => isbns, :user_id => u.user_id).collect{|i| i.book_rating}
-        p = Main.pearson(x, y) unless x.nil? && y.nil?
-        if (p>max)
-          max = p 
-          user_id = u.user_id
-        end
-      end
-    end
-    {"u" => user_id, "p" => max}
-  end
-
-
-  def self.random_rating(relative_frequency)
+  def self.random_rating(size, relative_frequency_boundary)
     r = Random.new
-    random_number = r.rand(1...relative_frequency[0])
+    random_number = r.rand(1..size)
 
     case random_number
-      when 1..relative_frequency[1]
+      when 1..relative_frequency_boundary[1]
         return 1
-      when relative_frequency[1]..(relative_frequency[1..2].reduce(:+))
+      when relative_frequency_boundary[1]..relative_frequency_boundary[2]
         return 2
-      when (relative_frequency[1..2].reduce(:+))..(relative_frequency[1..3].reduce(:+))
+      when relative_frequency_boundary[2]..relative_frequency_boundary[3]
         return 3
-      when (relative_frequency[1..3].reduce(:+))..(relative_frequency[1..4].reduce(:+))
+      when relative_frequency_boundary[3]..relative_frequency_boundary[4]
         return 4
-      when (relative_frequency[1..4].reduce(:+))..(relative_frequency[1..5].reduce(:+))
+      when relative_frequency_boundary[4]..relative_frequency_boundary[5]
         return 5
-      when (relative_frequency[1..5].reduce(:+))..(relative_frequency[1..6].reduce(:+))
+      when relative_frequency_boundary[5]..relative_frequency_boundary[6]
         return 6
-      when (relative_frequency[1..6].reduce(:+))..(relative_frequency[1..7].reduce(:+))
+      when relative_frequency_boundary[6]..relative_frequency_boundary[7]
         return 7
-      when (relative_frequency[1..7].reduce(:+))..(relative_frequency[1..8].reduce(:+))
+      when relative_frequency_boundary[7]..relative_frequency_boundary[8]
         return 8
-      when (relative_frequency[1..8].reduce(:+))..(relative_frequency[1..9].reduce(:+))
+      when relative_frequency_boundary[8]..relative_frequency_boundary[9]
         return 9
-      when (relative_frequency[1..9].reduce(:+))..(relative_frequency[1..10].reduce(:+))
+      when relative_frequency_boundary[9]..size
         return 10
       else
         raise 'Fail'
@@ -139,18 +116,65 @@ class Main
 
       book_ratings = []
 
+      relative_frequency_boundary = []
+      relative_frequency_boundary[1] = relative_frequency[1]
+      relative_frequency_boundary[2] = relative_frequency[1..2].reduce(:+)
+      relative_frequency_boundary[3] = relative_frequency[1..3].reduce(:+)
+      relative_frequency_boundary[4] = relative_frequency[1..4].reduce(:+)
+      relative_frequency_boundary[5] = relative_frequency[1..5].reduce(:+)
+      relative_frequency_boundary[6] = relative_frequency[1..6].reduce(:+)
+      relative_frequency_boundary[7] = relative_frequency[1..7].reduce(:+)
+      relative_frequency_boundary[8] = relative_frequency[1..8].reduce(:+)
+      relative_frequency_boundary[9] = relative_frequency[1..9].reduce(:+)
 
-      Book.all(:limit => 50).each do |book|
+
+      Book.all(:limit => 1000).each do |book|
         br = BookRating.first(:isbn => book.isbn, :user_id => user_id)
-        book_ratings << (br.nil? ? random_rating(relative_frequency) : ( (br.book_rating == 0) ? random_rating(relative_frequency) : br.book_rating)  )
+        book_ratings << (br.nil? ? random_rating(relative_frequency[0], relative_frequency_boundary) : ( (br.book_rating == 0) ? random_rating(relative_frequency[0], relative_frequency_boundary) : br.book_rating)  )
       end
       csv << [user_id]
       csv << book_ratings
       users_book_ratings[user_id] = book_ratings
-
-
     end
-    #linebreak
   end
+
+
+  max = 0;
+  u1_id = nil;
+  u2_id = nil;
+
+  users = User.all(:user_id => user_ids)
+
+  CSV.open("pearson_matrix.csv", "w") do |csv|
+    all_pearson = {}
+    users.each do |user_1|
+      pearson_m = []
+      users.each do |user_2|
+        
+        x = users_book_ratings[user_1.user_id]
+        y = users_book_ratings[user_2.user_id]
+        p = Main.pearson(x, y)
+        pearson_m << p
+        if (user_1.user_id != user_2.user_id && p > max)
+          max = p 
+          u2_id = user_2.user_id
+          u1_id = user_1.user_id
+        end
+      end
+      csv << pearson_m
+      all_pearson[user_1.user_id] = pearson_m
+    end
+    csv << ["\n"]
+  end
+
+  CSV.open("pearson_result.csv", "w") do |csv|
+    csv << [u1_id]
+    csv << [u2_id]
+    csv << [max]
+  end
+
+  puts u1_id
+  puts u2_id
+  puts max
 end
 
