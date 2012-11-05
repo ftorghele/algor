@@ -1,6 +1,8 @@
 require 'rubygems'
 require 'data_mapper'
 require 'dm-types'
+require 'csv'
+
 
 class BookRating
   include DataMapper::Resource
@@ -10,15 +12,30 @@ class BookRating
   property :book_rating, Integer, :field => "Book-Rating"
 end
 
-class User
+class Book
+  include DataMapper::Resource
+
+  property :isbn, String, :field => "ISBN", :key => true
+  property :title, String, :field => "Book-Title"
+  property :author, String, :field => "Book-Author"
+  property :year, Integer, :field => "Year-Of-Publication"
+  property :publisher, String, :field => "Publisher"
+  property :image_s, String, :field => "Image-URL-S"
+  property :image_m, String, :field => "Image-URL-M"
+  property :image_l, String, :field => "Image-URL-L"
+end
+
+class User 
   include DataMapper::Resource
 
   property :user_id, Serial, :field => "User-ID", :key => true
   property :location, String, :field => "Location"
   property :age, Integer, :field => "Age"
+
 end
 
-class Main
+
+class Main 
   @@config = YAML.load_file("./config.yml") rescue nil || {}
   DataMapper.setup(:default, "mysql://#{@@config["db"]["user"]}:#{@@config["db"]["pwd"]}@localhost/#{@@config["db"]["name"]}")
 
@@ -26,7 +43,31 @@ class Main
   user_ids = repository(:default).adapter.select('SELECT COUNT("User-ID") as count, "User-ID" FROM book_ratings
                                                   WHERE "Book-Rating" != 0
                                                   GROUP BY "User-ID"
-                                                  ORDER BY count DESC LIMIT 1').collect{|i| i.user_id}
+                                                  ORDER BY count DESC LIMIT 3').collect{|i| i.user_id}
+
+
+  def calculate user, user_ids
+
+    max = 0;
+    user_id = nil;
+
+    users = User.all(:user_id => user_ids)
+    users.each do |u|
+      if u.user_id != user.user_id
+        isbns = repository(:default).adapter.select('SELECT "ISBN" FROM book_ratings WHERE "User-ID" IN ?
+                                                GROUP BY "ISBN" HAVING COUNT("ISBN") = 2', [u.user_id, user.user_id] )
+        x = BookRating.all(:isbn => isbns, :user_id => user.user_id).collect{|i| i.book_rating}
+        y = BookRating.all(:isbn => isbns, :user_id => u.user_id).collect{|i| i.book_rating}
+        p = Main.pearson(x, y) unless x.nil? && y.nil?
+        if (p>max)
+          max = p 
+          user_id = u.user_id
+        end
+      end
+    end
+    {"u" => user_id, "p" => max}
+  end
+
 
   def self.random_rating(relative_frequency)
     r = Random.new
@@ -56,7 +97,6 @@ class Main
       else
         raise 'Fail'
     end
-
   end
 
   def self.pearson(x,y)
@@ -83,30 +123,34 @@ class Main
 
   ###########################################################
 
-  relative_frequencies={}
-  user_ratings={}
+  users_book_ratings={}
 
-  user_ids.each do |user_id|
-    user_ratings[user_id] =  BookRating.all(:user_id => user_id, :limit => 100)
+  CSV.open("ratings_matrix.csv", "wb") do |csv|
 
-    # Berechnung der entsprechenden relativen Häufigkeit
-    relative_frequency = []
-    relative_frequency[0] = BookRating.all(:user_id => user_id, :book_rating.gt => 0).count #all ratings by user
-    (1..10).each do |i|
-      relative_frequency[i] = BookRating.all(:user_id => user_id, :book_rating => i).count
-    end
-    relative_frequencies[user_id] = relative_frequency
-
-    # 0 Werte auffüllen
-    user_ratings[user_id].each do |rating|
-      if rating.book_rating == 0
-        rating.book_rating = random_rating(relative_frequency)
+    user_ids.each do |user_id|
+      
+      # Berechnung der entsprechenden relativen Häufigkeit
+      relative_frequency = []
+      relative_frequency[0] = BookRating.all(:user_id => user_id, :book_rating.gt => 0).count #all ratings by user
+      (1..10).each do |i|
+        relative_frequency[i] = BookRating.all(:user_id => user_id, :book_rating => i).count
       end
+     # relative_frequencies[user_id] = relative_frequency
+
+      book_ratings = []
+
+
+      Book.all(:limit => 50).each do |book|
+        br = BookRating.first(:isbn => book.isbn, :user_id => user_id)
+        book_ratings << (br.nil? ? random_rating(relative_frequency) : ( (br.book_rating == 0) ? random_rating(relative_frequency) : br.book_rating)  )
+      end
+      csv << [user_id]
+      csv << book_ratings
+      users_book_ratings[user_id] = book_ratings
+
+
     end
-
-    puts user_ratings.inspect
-
+    #linebreak
   end
-
 end
 

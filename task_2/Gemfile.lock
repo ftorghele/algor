@@ -54,23 +54,15 @@ GEM
       data_objects (= 0.10.7)
     eventmachine (1.0.0)
     fastercsv (1.5.4)
-    haml (3.1.7)
     json (1.6.5)
     json_pure (1.6.5)
     multi_json (1.0.4)
     rack (1.4.0)
-    rack-protection (1.2.0)
-      rack
-    sinatra (1.3.2)
-      rack (~> 1.3, >= 1.3.6)
-      rack-protection (~> 1.2)
-      tilt (~> 1.3, >= 1.3.3)
     stringex (1.3.0)
     thin (1.5.0)
       daemons (>= 1.0.9)
       eventmachine (>= 0.12.6)
       rack (>= 1.0.0)
-    tilt (1.3.3)
     uuidtools (2.1.2)
 
 PLATFORMS
@@ -88,6 +80,4 @@ DEPENDENCIES
   dm-timestamps
   dm-types
   dm-validations
-  haml
-  sinatra
   thin

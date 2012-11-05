@@ -2,3 +2,4 @@
 .idea
 .rvmrc
 */config.yml
+*/*.csv
