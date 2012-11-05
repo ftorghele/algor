@@ -43,7 +43,7 @@ class Main
   user_ids = repository(:default).adapter.select('SELECT COUNT("User-ID") as count, "User-ID" FROM book_ratings
                                                   WHERE "Book-Rating" != 0
                                                   GROUP BY "User-ID"
-                                                  ORDER BY count DESC LIMIT 5').collect{|i| i.user_id}
+                                                  ORDER BY count DESC LIMIT 50').collect{|i| i.user_id}
 
 
   def self.random_rating(size, relative_frequency_boundary)
@@ -128,7 +128,7 @@ class Main
       relative_frequency_boundary[9] = relative_frequency[1..9].reduce(:+)
 
 
-      Book.all(:limit => 1000).each do |book|
+      Book.all().each do |book|
         br = BookRating.first(:isbn => book.isbn, :user_id => user_id)
         book_ratings << (br.nil? ? random_rating(relative_frequency[0], relative_frequency_boundary) : ( (br.book_rating == 0) ? random_rating(relative_frequency[0], relative_frequency_boundary) : br.book_rating)  )
       end
