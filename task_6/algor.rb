@@ -63,6 +63,13 @@ helpers do
     return r
   end
 
+  def get_top_user_id
+     repository(:default).adapter.select('SELECT COUNT("User-ID") as count, "User-ID" FROM book_ratings
+                                                  WHERE "Book-Rating" != 0
+                                                  GROUP BY "User-ID"
+                                                  ORDER BY count DESC LIMIT 1').collect{|i| i.user_id}
+  end
+
   def cosine_similarity(x, y)
     x_vector = Vector.[](*x)
     y_vector = Vector.[](*y)
@@ -74,6 +81,7 @@ helpers do
   end
 
   def compare_users(user1_id, user2_id)
+    puts get_top_user_id
     isbns = repository(:default).adapter.select('SELECT "ISBN" FROM book_ratings WHERE "User-ID" IN ?
                                                 GROUP BY "ISBN" HAVING COUNT("ISBN") = 2', [user1_id, user2_id])
 
