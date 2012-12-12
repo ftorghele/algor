@@ -63,11 +63,11 @@ helpers do
     return r
   end
 
-  def get_top_user_id
+  def get_top_user_ids
      repository(:default).adapter.select('SELECT COUNT("User-ID") as count, "User-ID" FROM book_ratings
                                                   WHERE "Book-Rating" != 0
                                                   GROUP BY "User-ID"
-                                                  ORDER BY count DESC LIMIT 1').collect{|i| i.user_id}
+                                                  ORDER BY count DESC LIMIT 10').collect{|i| i.user_id}
   end
 
   def cosine_similarity(x, y)
@@ -80,16 +80,96 @@ helpers do
     return inner_p / (x_vector.r * y_vector.r)
   end
 
-  def compare_users(user1_id, user2_id)
-    puts get_top_user_id
-    isbns = repository(:default).adapter.select('SELECT "ISBN" FROM book_ratings WHERE "User-ID" IN ?
-                                                GROUP BY "ISBN" HAVING COUNT("ISBN") = 2', [user1_id, user2_id])
+  def most_similar_users
 
-    x = BookRating.all(:isbn => isbns, :user_id => user1_id).collect{|i| i.book_rating}
-    y = BookRating.all(:isbn => isbns, :user_id => user2_id).collect{|i| i.book_rating}
+    user_ids = get_top_user_ids
+    top_user = user_ids[0]
+    user_ids.each do |user|
+      unless top_user == user 
+        isbns = repository(:default).adapter.select('SELECT "ISBN" FROM book_ratings WHERE "User-ID" IN ?
+                                                GROUP BY "ISBN" HAVING COUNT("ISBN") = 2', [top_user, user])
 
-    "<li>Pearson : #{pearson(x, y)}</li>
-     <li>Cosine Similarity: #{cosine_similarity(x, y)}</li>"
+        x = BookRating.all(:isbn => isbns, :user_id => top_user).collect{|i| i.book_rating}
+        y = BookRating.all(:isbn => isbns, :user_id => user).collect{|i| i.book_rating}
+      end
+    end
   end
 
+  def rmea original, test
+    puts original.inspect
+    puts test.inspect
+    n = original.length-1
+    result = 0.0
+
+    (0..n).each do |index|
+      result = result + ( (original[index]-test[index])**2 )
+    end
+    Math.sqrt(result)
+  end
+
+  def simple_copy
+    user1 = 11676
+    user2 = 248718
+
+    user1_original = []
+    user1_test = []
+
+    isbns = repository(:default).adapter.select('SELECT "ISBN" FROM book_ratings WHERE "User-ID" IN ?
+                                                GROUP BY "ISBN" HAVING COUNT("ISBN") = 2', [user1, user2])
+
+    count = 0
+    isbns.each do |isbn|
+      x = BookRating.all(:isbn => isbn, :user_id => user1).collect{|i| i.book_rating}.first
+      y = BookRating.all(:isbn => isbn, :user_id => user2).collect{|i| i.book_rating}.first
+      
+      user1_original << x
+
+      if count % 8 == 0
+        user1_test << y
+      else
+         user1_test << x
+      end
+      count = count + 1
+    end
+    rm = rmea(user1_test, user1_original)
+
+    puts "RMEA simple_copy: #{rm}"    
+    puts "____________________________________"
+  end
+
+
+  def weighted_copy
+    user1 = 11676
+    user2 = 248718
+
+    user1_original = []
+    user1_test = []
+
+    isbns = repository(:default).adapter.select('SELECT "ISBN" FROM book_ratings WHERE "User-ID" IN ?
+                                                GROUP BY "ISBN" HAVING COUNT("ISBN") = 2', [user1, user2])
+
+    count = 0
+
+    user1avg = BookRating.all(:isbn => isbns, :user_id => user1).collect{|i| i.book_rating}.reduce(:+) / isbns.length
+    user2avg = BookRating.all(:isbn => isbns, :user_id => user2).collect{|i| i.book_rating}.reduce(:+) / isbns.length
+
+    isbns.each do |isbn|
+      x = BookRating.all(:isbn => isbn, :user_id => user1).collect{|i| i.book_rating}.first
+      y = BookRating.all(:isbn => isbn, :user_id => user2).collect{|i| i.book_rating}.first
+      user1_original << x
+
+      if count % 8 == 0
+        user1_test << ((user1avg<user2avg) ? ((y==0) ? y : y-1) : ((y==10) ? y : y+1))
+      else
+         user1_test << x
+      end
+      count = count + 1
+    end
+
+    rm = rmea(user1_test, user1_original)
+
+    puts "RMEA weighted_copy: #{rm}"
+    puts "____________________________________"
+  end
 end
+
